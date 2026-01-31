@@ -1,5 +1,5 @@
 ---
-title: Malware analysis 01 - Classic sample OpenProcess injection
+title: Malware Analysis Notes - Classic sample OpenProcess injection
 time: 2026-1-30 1:00:00
 categories: [research]
 tags: [malware analysis, process injection]
@@ -9,12 +9,17 @@ image: ../assets/posts/29-1-2026-SimpleOpenProcess-Analysis/process_hacker1.png
 Hello everyone, in this series I would like to document my learning process on malware analysis step by step, from the basics to advancing my skills.
 
 In this post, I will statically and dynamically analyze a simple sample of a process injection that uses the Win32 API to inject shellcode(execute MessageBoxA) into a process.
+
+This is an educational sample created by me. Real malware uses techniques that are a thousand times more advanced than what you will find here. I hope you enjoy it. 
+
 ```shell
-md5: 9f48c935f2ecc9001a7beaa3189b9d2c
+❯ file sample.exe
+sample.exe: PE32+ executable for MS Windows 5.02 (console), x86-64 (stripped to external PDB), 10 sections
+	    md5: 9f48c935f2ecc9001a7beaa3189b9d2c
 ```
 ## Static analysis
 
-First, since it is a PE file, executable for Windows, I will use PE-Bear to analyze its structure.
+First, since it is a PE32+ file, executable for Windows, I will use PE-Bear to analyze its structure.
 
 ![pebear](../assets/posts/29-1-2026-SimpleOpenProcess-Analysis/pebear.png)
 
@@ -42,32 +47,39 @@ call `sub.api_ms_win_crt_private_l1_1_0.dll_memcpy ; void *memcpy(void *s1, cons
 Now we trace the R15 and RSI registers to determine the offset of the address where *s2(shellcode) is stored.
 
 ```python
->>> hex(0x140008018-0x4efb)
-'0x14000311d'
+>>> hex(0x140008018-0x4f64)
+'0x1400030b4'
 ```
 
 ```
-0x140001010]> px 256 @ 0x14000311d
-- offset -   1D1E 1F20 2122 2324 2526 2728 292A 2B2C  DEF0123456789ABC
-0x14000311d  8088 0000 0048 85c0 7467 4801 d050 8b48  .....H..tgH..P.H
-0x14000312d  1844 8b40 2049 01d0 e356 4d31 c948 ffc9  .D.@ I...VM1.H..
-0x14000313d  418b 3488 4801 d648 31c0 41c1 c90d ac41  A.4.H..H1.A....A
-0x14000314d  01c1 38e0 75f1 4c03 4c24 0845 39d1 75d8  ..8.u.L.L$.E9.u.
-0x14000315d  5844 8b40 2449 01d0 6641 8b0c 4844 8b40  XD.@$I..fA..HD.@
-0x14000316d  1c49 01d0 418b 0488 4158 4158 5e59 4801  .I..A...AXAX^YH.
-0x14000317d  d05a 4158 4159 415a 4883 ec20 4152 ffe0  .ZAXAYAZH.. AR..
-0x14000318d  5841 595a 488b 12e9 4bff ffff 5de8 0b00  XAYZH...K...]...
-0x14000319d  0000 7573 6572 3332 2e64 6c6c 0059 41ba  ..user32.dll.YA.
-0x1400031ad  4c77 2607 ffd5 49c7 c100 0000 00e8 1500  Lw&...I.........
-0x1400031bd  0000 7520 6861 7665 2062 6565 6e20 7077  ..u have been pw
-0x1400031cd  6e65 6420 3a29 005a e807 0000 0061 7364  ned :).Z.....asd
-0x1400031dd  6173 6400 4158 4831 c941 ba45 8356 07ff  asd.AXH1.A.E.V..
-0x1400031ed  d548 31c9 41ba f0b5 a256 ffd5 0000 0000  .H1.A....V......
+[0x140001010]> px 332 @  0x1400030b4
+- offset -   B4B5 B6B7 B8B9 BABB BCBD BEBF C0C1 C2C3  456789ABCDEF0123
+0x1400030b4  0100 0000 0000 0000 0000 0000 fc48 81e4  .............H..
+0x1400030c4  f0ff ffff e8cc 0000 0041 5141 5052 5148  .........AQAPRQH
+0x1400030d4  31d2 6548 8b52 6056 488b 5218 488b 5220  1.eH.R`VH.R.H.R 
+0x1400030e4  4d31 c948 0fb7 4a4a 488b 7250 4831 c0ac  M1.H..JJH.rPH1..
+0x1400030f4  3c61 7c02 2c20 41c1 c90d 4101 c1e2 ed52  <a|., A...A....R
+0x140003104  488b 5220 4151 8b42 3c48 01d0 6681 7818  H.R AQ.B<H..f.x.
+0x140003114  0b02 0f85 7200 0000 8b80 8800 0000 4885  ....r.........H.
+0x140003124  c074 6748 01d0 508b 4818 448b 4020 4901  .tgH..P.H.D.@ I.
+0x140003134  d0e3 564d 31c9 48ff c941 8b34 8848 01d6  ..VM1.H..A.4.H..
+0x140003144  4831 c041 c1c9 0dac 4101 c138 e075 f14c  H1.A....A..8.u.L
+0x140003154  034c 2408 4539 d175 d858 448b 4024 4901  .L$.E9.u.XD.@$I.
+0x140003164  d066 418b 0c48 448b 401c 4901 d041 8b04  .fA..HD.@.I..A..
+0x140003174  8841 5841 585e 5948 01d0 5a41 5841 5941  .AXAX^YH..ZAXAYA
+0x140003184  5a48 83ec 2041 52ff e058 4159 5a48 8b12  ZH.. AR..XAYZH..
+0x140003194  e94b ffff ff5d e80b 0000 0075 7365 7233  .K...].....user3
+0x1400031a4  322e 646c 6c00 5941 ba4c 7726 07ff d549  2.dll.YA.Lw&...I
+0x1400031b4  c7c1 0000 0000 e815 0000 0075 2068 6176  ...........u hav
+0x1400031c4  6520 6265 656e 2070 776e 6564 203a 2900  e been pwned :).
+0x1400031d4  5ae8 0700 0000 6173 6461 7364 0041 5848  Z.....asdasd.AXH
+0x1400031e4  31c9 41ba 4583 5607 ffd5 4831 c941 baf0  1.A.E.V...H1.A..
+0x1400031f4  b5a2 56ff d500 0000 0000 0000            ..V.........
 ```
 
 We already have the shellcode. In the future, I will explain how we can dump the opcodes and disassemble them to obtain the actual instructions (only if it is raw in the code).
 
-## Dynamic Analisis
+## Dynamic analysis
 
 For the dynamic analysis, I will be using a Windows 10 lab.
 
@@ -82,7 +94,9 @@ Here you can see how the sample code calls the messagebox within another process
 You can see how a new memory section with RX permissions (PAGE_EXECUTE_READ) has been created. Upon analyzing it, we see that the hexadecimal value matches the one we obtained in the static analysis.
 
 [OpenProcess](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess)
+
 [VirtualAllocEx](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualallocex)
+
 [WriteProcessMemory](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory)
 
 Thanks for reading this far and apologies for my non-technical language (I'm not very good at it)...
